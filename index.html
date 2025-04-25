@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Correo IA - Edición Completa</title>
+    <!-- Fuentes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Quill Rich Text Editor -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.2/dist/quill.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #f9fafb; --pane-bg: #ffffff; --border-color: #e5e7eb;
+            --text-primary: #1f2937; --text-secondary: #6b7280; --accent-color: #3b82f6;
+            --accent-dark: #2563eb; --input-bg: #f9fafb; --output-bg: #ffffff;
+            --success-green: #10b981; --error-red: #ef4444; --warning-amber: #f59e0b;
+            --border-radius: 10px; --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.07);
+            --transition: 0.25s ease-in-out;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif; background-color: var(--bg-color);
+            color: var(--text-primary); line-height: 1.65; padding: 25px;
+            min-height: 100vh; display: flex; justify-content: center; align-items: flex-start;
+        }
+        .editor-container {
+            width: 100%; max-width: 1250px; display: grid;
+            grid-template-columns: 1fr; gap: 30px;
+        }
+
+        /* --- Layout Responsivo --- */
+        @media (min-width: 1024px) {
+            .editor-container {
+                /* Col Izq más ancha para 3 cols de tonos */
+                grid-template-columns: 460px 1fr;
+            }
+            .input-pane {
+                 position: sticky; top: 25px; align-self: start;
+                 max-height: calc(100vh - 50px); overflow-y: auto;
+             }
+        }
+
+        .input-pane, .output-pane {
+            background-color: var(--pane-bg); border-radius: var(--border-radius);
+            box-shadow: var(--shadow-md); padding: 30px 35px; box-sizing: border-box;
+        }
+        .input-pane::-webkit-scrollbar { width: 6px; }
+        .input-pane::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+        .pane-title {
+            font-size: 1.3rem; font-weight: 600; color: var(--text-primary);
+            margin-bottom: 25px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);
+        }
+        label {
+            display: block; margin-bottom: 8px; font-weight: 500;
+            color: var(--text-secondary); font-size: 0.9rem;
+        }
+
+        /* Inputs Generales */
+        input[type="text"] {
+            width: 100%; padding: 12px 14px; border: 1px solid var(--border-color);
+            border-radius: 8px; font-size: 1rem; font-family: inherit;
+            color: var(--text-primary); background-color: var(--input-bg);
+            transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition);
+        }
+        input[type="text"]:focus {
+             outline: none; border-color: var(--accent-color);
+             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background-color: var(--white);
+        }
+        #asuntoOutput:not([readonly]) { background-color: var(--output-bg); cursor: text; }
+        #asuntoOutput:not([readonly]):focus { border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+
+        /* Editor de Entrada (DIV ContentEditable) */
+        #correoOriginalEditor {
+            width: 100%; min-height: 220px; max-height: 450px; overflow-y: auto;
+            padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px;
+            font-size: 1rem; font-family: inherit; color: var(--text-primary);
+            background-color: var(--input-bg); line-height: 1.6; margin-bottom: 25px;
+            transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition);
+            white-space: pre-wrap; word-wrap: break-word; cursor: text;
+        }
+        #correoOriginalEditor:focus {
+            outline: none; border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background-color: var(--white);
+        }
+        #correoOriginalEditor:empty::before { content: attr(data-placeholder); color: var(--text-secondary); pointer-events: none; display: block; }
+        #correoOriginalEditor::-webkit-scrollbar { width: 6px; }
+        #correoOriginalEditor::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+
+        /* Tone Selector - RESPONSIVE CON 2 Y 3 COLUMNAS */
+        .tone-selector { margin: 25px 0 30px 0; }
+        .tone-options-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* Default: 2 columnas (móvil) */
+            gap: 12px;
+        }
+        @media (min-width: 768px) { /* Tablet y superior: 3 columnas */
+            .tone-options-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+            }
+        }
+        /* Estilos botones de tono (sin cambios) */
+        .tone-option-item input[type="radio"] { opacity: 0; position: absolute; width: 0; height: 0; }
+        .tone-option-item label { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer; transition: all var(--transition); background-color: var(--white); text-align: center; height: 100%; font-weight: 500; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0; user-select: none; }
+        .tone-option-item label .emoji { font-size: 1.6em; margin-bottom: 5px; line-height: 1; }
+        .tone-option-item label:hover { border-color: var(--accent-color); box-shadow: var(--shadow-sm); color: var(--accent-dark); }
+        .tone-option-item input[type="radio"]:checked + label { background-color: rgba(74, 144, 226, 0.08); border-color: var(--accent-color); color: var(--accent-dark); font-weight: 600; }
+        .tone-option-item input[type="radio"]:focus-visible + label { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+
+        /* Action Button (sin cambios) */
+        .action-section { text-align: center; margin-top: 20px; }
+        #improveButton { background-color: var(--accent-color); color: var(--white); border: none; padding: 12px 30px; font-size: 1rem; font-weight: 600; border-radius: 6px; cursor: pointer; transition: all var(--transition); display: inline-flex; align-items: center; gap: 8px; width: 100%; justify-content: center; }
+        #improveButton .icon { width: 1.1em; height: 1.1em; }
+        #improveButton:hover:not(:disabled) { background-color: var(--accent-dark); }
+        #improveButton:disabled { background-color: #bdc3c7; cursor: not-allowed; opacity: 0.8; }
+
+        /* Status Area (sin cambios) */
+        .status-section { margin-top: 20px; }
+        #statusArea { font-size: 0.85rem; background-color: var(--input-bg); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 120px; overflow-y: auto; display: none; }
+        #statusArea::-webkit-scrollbar { width: 4px; } #statusArea::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+        #statusArea div { margin-bottom: 4px; display: flex; align-items: center; gap: 6px;}
+        #statusArea .icon { width: 14px; height: 14px; flex-shrink: 0;}
+        #statusArea .error { color: var(--error-red); } #statusArea .success { color: var(--success-green); }
+        #statusArea .warning { color: var(--warning-amber); } #statusArea .info { color: var(--accent-color); }
+
+        /* Output Pane & Quill Editor (sin cambios) */
+        .output-group { position: relative; margin-bottom: 15px; }
+        .quill-editor-container { position: relative; margin-top: 5px; border: 1px solid var(--border-color); border-radius: var(--border-radius); overflow: hidden; transition: border-color var(--transition), box-shadow var(--transition); }
+        .quill-editor-container.editable { border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        #editor-container { height: auto; min-height: 300px; }
+        .ql-toolbar.ql-snow { border: none; border-bottom: 1px solid var(--border-color); background-color: #f9fafb; border-radius: var(--border-radius) var(--border-radius) 0 0; padding: 8px 10px; }
+        .ql-container.ql-snow { border: none; font-size: 1rem; background-color: var(--output-bg); min-height: 260px; border-radius: 0 0 var(--border-radius) var(--border-radius); }
+        .ql-editor { line-height: 1.7; padding: 15px 18px; color: var(--text-primary); min-height: inherit; }
+        .ql-editor.ql-blank::before{ content: attr(data-placeholder); color: var(--text-secondary); font-style: normal; left: 18px; right: 18px; pointer-events: none;}
+        .ql-disabled .ql-editor { background-color: var(--input-bg); cursor: default; color: var(--text-secondary); }
+        .ql-disabled .ql-toolbar { opacity: 0.6; pointer-events: none; }
+
+        /* Copy Button (sin cambios) */
+        .copy-button { position: absolute; top: 4px; right: 4px; background-color: transparent; border: none; color: var(--text-secondary); padding: 5px; cursor: pointer; border-radius: 4px; transition: all var(--transition); display: flex; align-items: center; justify-content: center; z-index: 10; }
+        #copy-button-body { top: 40px; right: 10px; }
+        .copy-button .icon { width: 18px; height: 18px; }
+        .copy-button:hover { color: var(--text-primary); background-color: #eee; }
+        .copy-button.copied { color: var(--success-green); background-color: #e0fcf4;}
+
+        /* Spinner (sin cambios) */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner { display: inline-block; width: 1em; height: 1em; margin-right: 0.5em; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; vertical-align: middle; position: relative; top: -1px; }
+
+        /* Ajuste fino responsivo */
+        @media (max-width: 1023px) { body { padding: 15px; } .input-pane { position: static; max-height: none; overflow-y: visible;} /* No sticky */ }
+        @media (max-width: 767px) { /* Móviles */ #correoOriginalEditor { min-height: 150px; max-height: 300px; } #editor-container, .ql-container.ql-snow { min-height: 200px; } #copy-button-body { top: 35px; } }
+
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <!-- Columna Izquierda: Entrada y Controles -->
+        <div class="input-pane">
+             <h2 class="pane-title">Tu Correo</h2>
+             <label for="correoOriginalEditor">Escribe o pega tu borrador (con formato):</label>
+             <div id="correoOriginalEditor" contenteditable="true" role="textbox"
+                  aria-multiline="true" aria-label="Borrador del correo"
+                  data-placeholder="Empieza a escribir o pega aquí tu texto..."></div>
+
+             <div class="tone-selector">
+                  <label>Elige el tono deseado:</label>
+                  <div class="tone-options-grid">
+                      <!-- Opciones de Tono -->
+                      <div class="tone-option-item"> <input type="radio" id="tono-formal" name="toneOption" value="formal" checked> <label for="tono-formal"><span class="emoji">👔</span>Formal</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-amable" name="toneOption" value="amable"> <label for="tono-amable"><span class="emoji">😊</span>Amable</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-informal" name="toneOption" value="informal"> <label for="tono-informal"><span class="emoji">👋</span>Informal</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-persuasivo" name="toneOption" value="persuasivo"> <label for="tono-persuasivo"><span class="emoji">🎯</span>Persuasivo</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-directo" name="toneOption" value="directo"> <label for="tono-directo"><span class="emoji">➡️</span>Directo</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-empatico" name="toneOption" value="empatico"> <label for="tono-empatico"><span class="emoji">🤝</span>Empático</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-asertivo" name="toneOption" value="asertivo"> <label for="tono-asertivo"><span class="emoji">🗣️</span>Asertivo</label> </div>
+                      <div class="tone-option-item"> <input type="radio" id="tono-urgente" name="toneOption" value="urgente"> <label for="tono-urgente"><span class="emoji">🚨</span>Urgente</label> </div>
+                  </div>
+             </div>
+
+             <div class="action-section">
+                  <button id="improveButton" onclick="mejorarCorreo()">
+                       <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5c.154 0 .302.012.445.034l.42.067.415.09.397.117.371.142.337.164.295.181.248.192.195.195.192.248.181.295.164.337.142.371.117.397.09.415.067.42A6.5 6.5 0 0115.5 10c0 1.168-.307 2.25-.838 3.17l-.067.12-.09.157-.117.187-.142.212-.164.23-.181.24-.192.242-.195.237-.248.226-.295.208-.337.184-.371.155-.397.122-.415.085-.42.045A6.5 6.5 0 0110 16.5a6.5 6.5 0 01-3.17-.838l-.12-.067-.157-.09-.187-.117-.212-.142-.23-.164-.24-.181-.242-.192-.237-.195-.226-.248-.208-.295-.184-.337-.155-.371-.122-.397-.085-.415-.045-.42A6.5 6.5 0 014.5 10c0-1.168.307-2.25.838-3.17l.067-.12.09-.157.117-.187.142-.212.164-.23.181-.24.192-.242.195-.237.248-.226.295-.208.337-.184.371-.155.397-.122.415-.085.42-.045A6.5 6.5 0 0110 3.5zM6 5.75A.75.75 0 016.75 5h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 016 5.75zm4-.75a.75.75 0 00-1.5 0v1.5h-1.5a.75.75 0 000 1.5h1.5v1.5a.75.75 0 001.5 0v-1.5h1.5a.75.75 0 000-1.5h-1.5v-1.5zM6 10.75A.75.75 0 016.75 10h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zm4 1.5a.75.75 0 00-1.5 0v1.5h-1.5a.75.75 0 000 1.5h1.5v1.5a.75.75 0 001.5 0v-1.5h1.5a.75.75 0 000-1.5h-1.5v-1.5zM14 10.75a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75z"/></svg>
+                       <span class="button-text">Mejorar con IA</span>
+                  </button>
+             </div>
+
+              <div class="status-section">
+                  <div id="statusArea"></div>
+              </div>
+         </div>
+
+        <!-- Columna Derecha: Resultado -->
+        <div class="output-pane">
+             <h2 class="pane-title">Correo Mejorado</h2>
+             <div class="output-group">
+                 <label for="asuntoOutput">Asunto Sugerido:</label>
+                 <input type="text" id="asuntoOutput" readonly placeholder="El asunto generado aparecerá aquí...">
+                  <button class="copy-button" onclick="copyToClipboard('asuntoOutput', this)" title="Copiar asunto">
+                      <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.11-7.5-8.866M10.5 6h-4.125a1.125 1.125 0 00-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125h4.125a1.125 1.125 0 001.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125z" /></svg>
+                      <span class="copy-text" style="display:none;">Copiar</span>
+                  </button>
+             </div>
+              <div class="output-group">
+                 <label for="editor-container">Cuerpo del Correo:</label>
+                 <div class="quill-editor-container" id="quill-container">
+                      <div id="editor-container"></div> <!-- Quill se monta aquí -->
+                 </div>
+                  <button class="copy-button" id="copy-button-body" onclick="copyToClipboard('editor-container', this)" title="Copiar cuerpo (texto plano)">
+                      <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.11-7.5-8.866M10.5 6h-4.125a1.125 1.125 0 00-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125h4.125a1.125 1.125 0 001.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125z" /></svg>
+                      <span class="copy-text" style="display:none;">Copiar</span>
+                  </button>
+             </div>
+         </div>
+    </div> <!-- Fin de editor-container -->
+
+    <script>
+        // --- Configuración (sin cambios) ---
+        const API_KEY = 'AIzaSyDPdkgtN6KvgwqmnVZ__x1h7XlkOxRCc6s'; // CAMBIAR ESTO!
+        const GEMINI_MODEL = 'gemini-1.5-flash';
+        const API_ENDPOINT_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+        const MAX_RETRIES = 2;
+        const RETRY_DELAY_BASE_MS = 1000;
+        const MAX_OUTPUT_TOKENS_EMAIL = 2500;
+
+        // --- Referencias DOM (sin cambios) ---
+        const improveButton = document.getElementById('improveButton');
+        const buttonTextSpan = improveButton.querySelector('.button-text');
+        const correoOriginalEditor = document.getElementById('correoOriginalEditor');
+        const statusArea = document.getElementById('statusArea');
+        const asuntoOutput = document.getElementById('asuntoOutput');
+        const quillContainer = document.getElementById('quill-container');
+
+        // --- Estado (sin cambios) ---
+        let isProcessing = false;
+        let quill;
+
+        // --- Inicializar Quill (sin cambios) ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const toolbarOptions = [ [{ 'header': [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ 'list': 'ordered'}, { 'list': 'bullet' }, { 'list': 'check' }], [{ 'indent': '-1'}, { 'indent': '+1' }], [{ 'color': [] }, { 'background': [] }], [{ 'align': [] }], ['link'], ['clean'] ];
+            quill = new Quill('#editor-container', { modules: { toolbar: toolbarOptions }, theme: 'snow', placeholder: 'El correo mejorado aparecerá aquí...', readOnly: true });
+            quill.on('editor-change', () => quillContainer.classList.toggle('editable', quill.isEnabled()));
+            quillContainer.classList.remove('editable');
+        });
+
+        // --- Bloqueo F12 (sin cambios) ---
+        const COMPANY_NAME = "Neumann";
+        function handleKeyDown(event) { if (event.key === 'F12' || (event.ctrlKey && event.shiftKey && (event.key === 'I' || event.key === 'J' || event.key === 'C')) || (event.ctrlKey && event.key === 'U')) { event.preventDefault(); console.warn(`Intento de acceso a DevTools bloqueado.`); alert(`¡ACCIÓN NO AUTORIZADA DETECTADA! Política de ética de ${COMPANY_NAME} violada.`); } }
+        document.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // --- Limpieza de Markdown (sin cambios) ---
+        function cleanMarkdown(text) { if (!text) return ''; let cleaned = text; cleaned = cleaned.replace(/^[#]{1,6}\s+/gm, ''); cleaned = cleaned.replace(/(\*\*|__)(.*?)\1/g, '$2'); cleaned = cleaned.replace(/(\*|_)(.*?)\1/g, '$2'); cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, ''); cleaned = cleaned.replace(/^[\s]*\d+\.\s+/gm, ''); cleaned = cleaned.replace(/```[\s\S]*?```/g, ''); cleaned = cleaned.replace(/`([^`]+)`/g, '$1'); cleaned = cleaned.replace(/^(\s*[-*_]){3,}\s*$/gm, ''); cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); cleaned = cleaned.replace(/\n{3,}/g, '\n\n'); return cleaned.trim(); }
+
+        // --- Sanitizador de HTML (sin cambios) ---
+         function sanitizeHtml(htmlString) {
+             const allowedTags = ['b', 'i', 'u', 'p', 'br', 'strong', 'em', 'ol', 'ul', 'li']; // Añadimos listas
+             // Permitir atributos 'href' en 'a' y 'src' en 'img' (aunque no pedimos img activamente)
+             const allowedAttributes = { 'a': ['href'], 'img': ['src', 'alt'] };
+
+             try {
+                 const parser = new DOMParser();
+                 const doc = parser.parseFromString(htmlString, 'text/html');
+                 const elements = doc.body.querySelectorAll('*');
+
+                 elements.forEach(el => {
+                     const tagName = el.tagName.toLowerCase();
+
+                     // 1. Eliminar atributos no permitidos
+                     Array.from(el.attributes).forEach(attr => {
+                         const attrName = attr.name.toLowerCase();
+                         const allowedAttrsForTag = allowedAttributes[tagName] || [];
+                         if (!allowedAttrsForTag.includes(attrName)) {
+                             el.removeAttribute(attrName);
+                         }
+                         // Simple check for potentially harmful protocols in href/src
+                         if ((attrName === 'href' || attrName === 'src') && attr.value.startsWith('javascript:')) {
+                              el.removeAttribute(attrName);
+                         }
+                     });
+
+                     // 2. Verificar etiqueta permitida
+                     if (!allowedTags.includes(tagName)) {
+                         el.replaceWith(...el.childNodes); // Reemplazar con contenido
+                     }
+                 });
+                 return doc.body.innerHTML;
+             } catch (error) {
+                 console.error("Error sanitizando HTML:", error);
+                 const tempDiv = document.createElement('div');
+                 tempDiv.innerHTML = htmlString;
+                 return tempDiv.textContent || tempDiv.innerText || ""; // Fallback a texto plano
+             }
+         }
+
+
+        // --- Funciones Auxiliares ---
+        function updateStatus(message, type = 'info') { /* ... (sin cambios) ... */
+             statusArea.style.display = 'block'; const statusLine = document.createElement('div'); const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); let iconSvg = '';
+              switch(type) { case 'success': iconSvg = `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="var(--success-green)"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>`; break; case 'error': iconSvg = `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="var(--error-red)"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-13a1 1 0 011 1v4a1 1 0 11-2 0V6a1 1 0 011-1zm0 8a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd" /></svg>`; break; case 'warning': iconSvg = `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="var(--warning-amber)"><path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>`; break; default: iconSvg = `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="var(--accent-color)"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>`; }
+             statusLine.innerHTML = `${iconSvg} <span>[${timestamp}] ${message}</span>`; statusLine.classList.add(type); statusArea.insertBefore(statusLine, statusArea.firstChild); if (statusArea.children.length > 10) statusArea.removeChild(statusArea.lastChild); statusArea.scrollTop = 0;
+        }
+
+        function copyToClipboard(elementId, buttonElement) { /* ... (sin cambios) ... */
+            const element = document.getElementById(elementId); let textToCopy = ''; let labelText = elementId;
+            if (elementId === 'editor-container' && quill) { textToCopy = quill.getText(); const label = document.querySelector('label[for="editor-container"]'); if (label) labelText = label.textContent.replace(':',''); else labelText = "Cuerpo del correo";
+            } else if (element) { textToCopy = element.value; const label = element.previousElementSibling; if(label && label.nodeName === 'LABEL') labelText = label.textContent.replace(':','');
+            } else { updateStatus("Error interno al copiar.", 'error'); return; }
+            if (textToCopy && navigator.clipboard) { navigator.clipboard.writeText(textToCopy).then(() => { updateStatus(`"${labelText}" copiado (texto plano).`, 'success'); if (buttonElement) { buttonElement.classList.add('copied'); const originalIcon = buttonElement.innerHTML; buttonElement.innerHTML = `<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>`; setTimeout(() => { buttonElement.classList.remove('copied'); buttonElement.innerHTML = originalIcon; }, 1800); } }).catch(err => updateStatus(`Error al copiar "${labelText}".`, 'error'));
+            } else if (!textToCopy) updateStatus(`Nada que copiar para "${labelText}".`, 'warning'); else updateStatus(`Navegador no soporta copia segura.`, 'warning'); if (document.activeElement) document.activeElement.blur(); window.getSelection().removeAllRanges();
+        }
+
+        async function callGeminiAPI(prompt, contextForLog) { /* ... (sin cambios) ... */
+             const apiUrl = `${API_ENDPOINT_BASE}${GEMINI_MODEL}:generateContent?key=${API_KEY}`; const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS_EMAIL, responseMimeType: "application/json", temperature: 0.6, }, safetySettings: [ { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" } ] }; let lastError = null;
+             for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) { if (isProcessing === false && attempt > 1) return { success: false, error: "Proceso cancelado." }; const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }; if (attempt > 1) { const delay = RETRY_DELAY_BASE_MS * Math.pow(2, attempt - 2); updateStatus(`[${contextForLog}] Reintento ${attempt} en ${Math.round(delay/1000)}s...`, 'warning'); await new Promise(resolve => setTimeout(resolve, delay)); if (isProcessing === false) return { success: false, error: "Proceso cancelado." }; } else updateStatus(`Llamando API para [${contextForLog}]...`, 'info');
+             try { const response = await fetch(apiUrl, options); const responseBodyText = await response.text(); if (response.ok) { try { const jsonResponse = JSON.parse(responseBodyText); if (jsonResponse.candidates?.[0]?.content?.parts?.[0]?.text) { updateStatus(`API [${contextForLog}]: Respuesta OK.`, 'success'); return { success: true, data: jsonResponse.candidates[0].content.parts[0].text }; } updateStatus(`API [${contextForLog}]: Respuesta OK pero vacía/inesperada.`, 'warning'); return { success: false, error: "Respuesta OK pero sin contenido JSON útil.", data: responseBodyText }; } catch (e) { updateStatus(`API [${contextForLog}]: Respuesta no JSON.`, 'error'); return { success: false, error: `API no devolvió JSON: ${e.message}`, data: responseBodyText };} } else { let msg = `Error HTTP ${response.status}`; try { msg += `: ${JSON.parse(responseBodyText).error?.message || responseBodyText}`; } catch (e) { msg += `: ${responseBodyText}`; } lastError = msg; updateStatus(`Error API ${response.status}`, 'error'); if ((response.status === 429 || response.status >= 500) && attempt <= MAX_RETRIES) continue; else return { success: false, error: lastError }; } } catch (e) { lastError = `Error Red: ${e.message}`; updateStatus(`Error de Red`, 'error'); if (attempt <= MAX_RETRIES) continue; else return { success: false, error: lastError };} }
+             updateStatus(`API [${contextForLog}]: Falló tras ${MAX_RETRIES + 1} intentos. ${lastError}`, 'error'); return { success: false, error: lastError || "Reintentos agotados." };
+        }
+
+
+        // --- Lógica Principal (Adaptada para salida HTML) ---
+        async function mejorarCorreo() {
+             if (isProcessing || !quill) return;
+
+             const originalHtml = correoOriginalEditor.innerHTML.trim();
+             const originalTextContent = correoOriginalEditor.textContent.trim();
+             const selectedToneElement = document.querySelector('input[name="toneOption"]:checked');
+
+             if (!originalTextContent) { alert("Escribe o pega tu correo primero."); correoOriginalEditor.focus(); return; }
+             if (!selectedToneElement) { alert("Elige un tono, por favor."); document.querySelector('.tone-selector').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+             if (!API_KEY || API_KEY.includes('YOUR') || API_KEY.length < 20) { alert("API Key inválida."); updateStatus("Error: API Key inválida.", "error"); return; }
+
+             const selectedTone = selectedToneElement.value;
+
+             // --- Iniciar Proceso ---
+             isProcessing = true; improveButton.disabled = true; buttonTextSpan.textContent = 'Procesando...'; improveButton.insertAdjacentHTML('afterbegin', '<span class="spinner"></span>'); statusArea.innerHTML = ''; statusArea.style.display = 'none'; asuntoOutput.value = ''; quill.setContents([]); quill.enable(false); asuntoOutput.readOnly = true;
+             updateStatus("Preparando solicitud...", 'info');
+
+             // --- Prompt Pide HTML en la salida ---
+             const prompt = `Eres un asistente experto en comunicación y redacción de correos electrónicos. Toma el siguiente texto de correo electrónico ORIGINAL (puede contener HTML simple) y mejóralo significativamente. Texto Original (HTML): \`\`\`html\n${originalHtml}\n\`\`\` Requisitos: 1. Interpreta el HTML de entrada (énfasis, listas, etc.). Menciona imágenes como [imagen] o ignóralas. 2. Tono/Estilo: Reescribe con tono '${selectedTone}'. 3. Claridad y Profesionalismo: Claro, conciso, correcto. 4. Formato Sugerido: En el cuerpo reescrito, aplica formato **sutil** usando **SOLAMENTE** etiquetas HTML \`<b>\` (o \`<strong>\`), \`<i>\` (o \`<em>\`), \`<u>\`, \`<p>\`, \`<br>\`, \`<ul>\`, \`<ol>\`, \`<li>\`. Aplica formato solo donde aporte énfasis/claridad. No uses otros tags ni atributos. NO uses Markdown. 5. Asunto: Genera asunto breve (máx 10 palabras). 6. Formato Salida JSON: Responde ÚNICAMENTE con JSON válido: { "asunto_sugerido": "...", "cuerpo_mejorado": "Aquí el cuerpo completo del correo mejorado CON el formato HTML solicitado." }`;
+
+             const result = await callGeminiAPI(prompt, "Mejora de Correo");
+
+             // --- Procesar Resultado ---
+             let finalMessage = "";
+             if (result.success && result.data) {
+                 try {
+                     const parsedData = JSON.parse(result.data);
+                     if (parsedData.asunto_sugerido && parsedData.cuerpo_mejorado) {
+                         asuntoOutput.value = parsedData.asunto_sugerido;
+                         const sanitizedHtmlBody = sanitizeHtml(parsedData.cuerpo_mejorado); // Sanitizar HTML de la IA
+                         quill.clipboard.dangerouslyPasteHTML(0, sanitizedHtmlBody); // Insertar HTML en Quill
+                         finalMessage = "¡Correo mejorado con formato sugerido listo! Puedes editarlo.";
+                         updateStatus(finalMessage, 'success');
+                     } else { /* JSON incompleto */ finalMessage = "Error: Formato JSON incompleto. Edita el resultado parcial."; updateStatus(finalMessage, 'error'); if (parsedData.asunto_sugerido) asuntoOutput.value = parsedData.asunto_sugerido; if (parsedData.cuerpo_mejorado) quill.clipboard.dangerouslyPasteHTML(0, sanitizeHtml(parsedData.cuerpo_mejorado)); }
+                 } catch (parseError) { /* Error Parse JSON */ finalMessage = `Error procesando respuesta JSON. ${parseError.message}. Edita el resultado parcial.`; updateStatus(finalMessage, 'error'); quill.setText(`Error: Respuesta inválida de la API.\n\n${result.data}`); }
+             } else { /* Error API */ finalMessage = `Error API: ${result.error || 'Desconocido'}. Edita si hay texto.`; updateStatus(finalMessage, 'error'); quill.setText(`Fallo al generar mejora.\nError: ${result.error || ''}\n\n${result.data || ''}`); }
+
+             // --- Habilitar Edición y Finalizar ---
+             asuntoOutput.readOnly = false; quill.enable(true);
+             isProcessing = false; improveButton.disabled = false; const spinner = improveButton.querySelector('.spinner'); if(spinner) spinner.remove(); buttonTextSpan.textContent = 'Mejorar con IA';
+             if (!finalMessage.toLowerCase().includes("error api") || quill.getLength() > 1) { updateStatus("Asunto y cuerpo ahora son editables.", 'info'); }
+             quill.focus();
+        }
+
+    </script>
+</body>
+</html>
